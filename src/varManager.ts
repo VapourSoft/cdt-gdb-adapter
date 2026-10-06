@@ -25,6 +25,11 @@ export class VarManager {
         VarObjType[]
     >();
 
+    private readonly frameContexts: Map<
+        string,
+        { key: string; ready: Promise<void> }
+    > = new Map();
+
     constructor(protected gdb: IGDBBackend) {
         this.gdb = gdb;
     }
@@ -33,7 +38,67 @@ export class VarManager {
         if (!frameRef) {
             return `global`;
         }
-        return `frame${frameRef.frameId}_thread${frameRef.threadId}_depth${depth}`;
+        return `frame${frameRef.frameId}_thread${frameRef.threadId}_depth${depth}_pc${
+            frameRef.pc || ''
+        }`;
+    }
+
+    public prepareFrame(
+        frameRef: FrameReference | undefined,
+        depth: number
+    ): Promise<void> {
+        if (!frameRef?.pc) {
+            return Promise.resolve();
+        }
+
+        const identity = `frame${frameRef.frameId}_thread${frameRef.threadId}_depth${depth}`;
+        const key = this.getKey(frameRef, depth);
+        const previous = this.frameContexts.get(identity);
+        if (previous?.key === key) {
+            return previous.ready;
+        }
+
+        const context: { key: string; ready: Promise<void> } = {
+            key,
+            ready: Promise.resolve(),
+        };
+        context.ready = (async () => {
+            if (!previous) {
+                return;
+            }
+            await previous.ready;
+
+            const staleVars = this.variableMap.get(previous.key) || [];
+            let deletionError: unknown;
+            try {
+                for (const variable of staleVars) {
+                    if (!variable.isChild) {
+                        try {
+                            await sendVarDelete(this.gdb, {
+                                varname: variable.varname,
+                            });
+                        } catch (error) {
+                            if (deletionError === undefined) {
+                                deletionError = error;
+                            }
+                        }
+                    }
+                }
+            } finally {
+                this.variableMap.delete(previous.key);
+            }
+            if (deletionError !== undefined) {
+                throw deletionError;
+            }
+        })();
+
+        this.frameContexts.set(identity, context);
+        void context.ready.catch(() => {
+            if (this.frameContexts.get(identity) === context) {
+                this.frameContexts.delete(identity);
+            }
+        });
+        return context.ready;
     }
 
     public getVars(
