@@ -2804,7 +2804,8 @@ export abstract class GDBDebugSessionBase extends LoggingDebugSession {
                         memoryReferenceResult =
                             await mi.sendDataEvaluateExpression(
                                 gdb,
-                                `&(${varobj.expression})`
+                                `&(${varobj.expression})`,
+                                frameRef
                             );
                         // Depending on the GDBServer being used, sometimes the result of evaluating an address of a symbol returns "<address> <symbol name>"
                         if (memoryReferenceResult.value?.includes(' ')) {
@@ -3665,7 +3666,11 @@ export abstract class GDBDebugSessionBase extends LoggingDebugSession {
                         let value = varobj.value;
                         // if we have an array parent entry, we need to display the address.
                         if (arrayRegex.test(varobj.type)) {
-                            value = await this.getAddr(varobj, this.gdb);
+                            value = await this.getAddr(
+                                varobj,
+                                this.gdb,
+                                frameRef
+                            );
                         }
                         variables.push({
                             name: varobj.expression,
@@ -3728,7 +3733,7 @@ export abstract class GDBDebugSessionBase extends LoggingDebugSession {
                 let value = varobj.value;
                 // if we have an array parent entry, we need to display the address.
                 if (arrayRegex.test(varobj.type)) {
-                    value = await this.getAddr(varobj, this.gdb);
+                    value = await this.getAddr(varobj, this.gdb, frameRef);
                 }
                 variables.push({
                     name: varobj.expression,
@@ -3944,10 +3949,15 @@ export abstract class GDBDebugSessionBase extends LoggingDebugSession {
         return Promise.resolve(variables);
     }
 
-    protected async getAddr(varobj: VarObjType, gdb: IGDBBackend) {
+    protected async getAddr(
+        varobj: VarObjType,
+        gdb: IGDBBackend,
+        frameRef: FrameReference
+    ) {
         const addr = await mi.sendDataEvaluateExpression(
             gdb,
-            `&(${varobj.expression})`
+            `&(${varobj.expression})`,
+            frameRef
         );
         return addr.value ? addr.value : varobj.value;
     }
