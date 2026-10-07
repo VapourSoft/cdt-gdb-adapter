@@ -207,8 +207,6 @@ describe('VarManager.prepareFrame - PC-specific variable cache', function () {
             { varname: 'outer-var' }
         );
         expect(varManager.getVars(inner, 4)).to.have.length(1);
-        expect(varManager.getVars(inner, 4)?.[0].varname).to.equal(
-            'inner-var'
-        );
+        expect(varManager.getVars(inner, 4)?.[0].varname).to.equal('inner-var');
     });
 });
