@@ -219,23 +219,36 @@ describe('VarManager.prepareFrame - PC-specific variable cache', function () {
 
         await varManager.prepareFrame(frameRef, 2);
         varManager.addVar(frameRef, 2, 'local', true, false, {
-            name: 'stale',
+            name: 'stale1',
             numchild: '0',
             value: '1',
             type: 'int',
             _class: 'done',
         });
-        deleteStub.rejects(new Error('Variable object not found'));
+        varManager.addVar(frameRef, 2, 'local2', true, false, {
+            name: 'stale2',
+            numchild: '0',
+            value: '1',
+            type: 'int',
+            _class: 'done',
+        });
+        deleteStub.onCall(0).rejects(new Error('Variable object not found'));
+        deleteStub
+            .onCall(1)
+            .rejects(new Error('Another variable object not found'));
 
         await varManager.prepareFrame(nextFrameRef, 2);
 
-        sinon.assert.calledOnceWithExactly(deleteStub, gdb, {
-            varname: 'stale',
-        });
-        sinon.assert.calledOnceWithExactly(
-            verboseStub,
-            'Failed to delete stale varobj: Error: Variable object not found'
+        sinon.assert.calledTwice(deleteStub);
+        expect(deleteStub.getCalls().map((call) => call.args[1])).to.deep.equal(
+            [{ varname: 'stale1' }, { varname: 'stale2' }]
         );
+        expect(
+            verboseStub.getCalls().map((call) => call.args[0])
+        ).to.deep.equal([
+            'Failed to delete stale varobj stale1: Error: Variable object not found',
+            'Failed to delete stale varobj stale2: Error: Another variable object not found',
+        ]);
         expect(varManager.getVars(frameRef, 2)).to.be.undefined;
         expect(varManager.getVars(nextFrameRef, 2)).to.be.undefined;
     });

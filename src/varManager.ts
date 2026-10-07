@@ -70,7 +70,6 @@ export class VarManager {
             await previous.ready;
 
             const staleVars = this.variableMap.get(previous.key) || [];
-            let deletionError: unknown;
             try {
                 for (const variable of staleVars) {
                     if (!variable.isChild) {
@@ -79,19 +78,14 @@ export class VarManager {
                                 varname: variable.varname,
                             });
                         } catch (error) {
-                            if (deletionError === undefined) {
-                                deletionError = error;
-                            }
+                            logger.verbose(
+                                `Failed to delete stale varobj ${variable.varname}: ${error}`
+                            );
                         }
                     }
                 }
             } finally {
                 this.variableMap.delete(previous.key);
-            }
-            if (deletionError !== undefined) {
-                logger.verbose(
-                    `Failed to delete stale varobj: ${deletionError}`
-                );
             }
         })();
 
