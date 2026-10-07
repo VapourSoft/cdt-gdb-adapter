@@ -1,3 +1,4 @@
+import { logger } from '@vscode/debugadapter/lib/logger';
 import { IGDBBackend } from './types/gdb';
 import { FrameReference } from './types/session';
 import {
@@ -88,7 +89,9 @@ export class VarManager {
                 this.variableMap.delete(previous.key);
             }
             if (deletionError !== undefined) {
-                throw deletionError;
+                logger.verbose(
+                    `Failed to delete stale varobj: ${deletionError}`
+                );
             }
         })();
 

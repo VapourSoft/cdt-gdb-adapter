@@ -11,6 +11,7 @@
 import 'mocha';
 import { expect } from 'chai';
 import * as sinon from 'sinon';
+import { logger } from '@vscode/debugadapter/lib/logger';
 
 import * as miVar from '../mi/var';
 import { VarManager } from '../varManager';
@@ -208,5 +209,34 @@ describe('VarManager.prepareFrame - PC-specific variable cache', function () {
         );
         expect(varManager.getVars(inner, 4)).to.have.length(1);
         expect(varManager.getVars(inner, 4)?.[0].varname).to.equal('inner-var');
+    });
+
+    it('logs stale varobj deletion failures without failing frame preparation', async function () {
+        const frameRef = { threadId: 1, frameId: 0, pc: '0x300' };
+        const nextFrameRef = { ...frameRef, pc: '0x304' };
+        const deleteStub = miVar.sendVarDelete as sinon.SinonStub;
+        const verboseStub = sandbox.stub(logger, 'verbose');
+
+        await varManager.prepareFrame(frameRef, 2);
+        varManager.addVar(frameRef, 2, 'local', true, false, {
+            name: 'stale',
+            numchild: '0',
+            value: '1',
+            type: 'int',
+            _class: 'done',
+        });
+        deleteStub.rejects(new Error('Variable object not found'));
+
+        await varManager.prepareFrame(nextFrameRef, 2);
+
+        sinon.assert.calledOnceWithExactly(deleteStub, gdb, {
+            varname: 'stale',
+        });
+        sinon.assert.calledOnceWithExactly(
+            verboseStub,
+            'Failed to delete stale varobj: Error: Variable object not found'
+        );
+        expect(varManager.getVars(frameRef, 2)).to.be.undefined;
+        expect(varManager.getVars(nextFrameRef, 2)).to.be.undefined;
     });
 });
